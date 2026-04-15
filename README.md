@@ -2,7 +2,20 @@
 
 [![CI](https://github.com/SirADarbi/It-Asset-Compliance/actions/workflows/ci.yml/badge.svg)](https://github.com/SirADarbi/It-Asset-Compliance/actions/workflows/ci.yml)
 
-A production-ready compliance management system with FastAPI, PostgreSQL, Grafana, Terraform (AWS), Jenkins CI/CD, and GitHub Actions.
+### Purpose
+
+Organizations struggle to answer basic operational questions at scale: **what do we own**, **where is it exposed**, and **does it still match our security standards**—without spreadsheets and one-off scans. Drift happens fast (unpatched systems, risky ports, encryption or endpoint protection gaps), and when audits, incidents, or leadership ask for proof, teams need **repeatable checks**, **stored evidence**, and **prioritized findings**—not ad-hoc screenshots.
+
+This application addresses that by combining a **central asset inventory** with **automated policy evaluation** against that inventory. It gives a single place to register assets, run the same rules on a schedule or on demand, record pass/fail outcomes with severity, surface violations in **dashboards**, and **export reports** for remediation tracking, ticketing, or audit documentation.
+
+**Capabilities:**
+
+- Maintain structured records for each asset (identity, type, network exposure, patch posture, encryption, AV, password policy alignment, etc.).
+- Execute a defined set of compliance rules and persist every result with timestamps for traceability.
+- Summarize risk (e.g. by severity) and drill into failed checks by hostname and policy.
+- Consume results via API, Grafana, or downloadable JSON/XML for downstream workflows.
+
+**Stack (at a glance):** FastAPI, PostgreSQL, Grafana, Docker Compose, Terraform (AWS), Jenkins, GitHub Actions.
 
 ### Architecture
 
