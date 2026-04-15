@@ -43,6 +43,18 @@ ENV
 chmod 600 "$INSTALL_DIR/backend/.env"
 chown ubuntu:ubuntu "$INSTALL_DIR/backend/.env"
 
+# ── Root .env for Docker Compose ───────────────────────────────────────────────
+# docker-compose.yml requires POSTGRES_PASSWORD and GF_SECURITY_ADMIN_PASSWORD.
+# Use same DB password for Grafana admin in this bootstrap (demo simplicity).
+# shellcheck disable=SC2154
+cat > "$INSTALL_DIR/.env" <<ROOTENV
+POSTGRES_USER=${db_user}
+POSTGRES_PASSWORD=${db_password}
+GF_SECURITY_ADMIN_PASSWORD=${db_password}
+ROOTENV
+chmod 600 "$INSTALL_DIR/.env"
+chown ubuntu:ubuntu "$INSTALL_DIR/.env"
+
 # ── Start Docker stack (Postgres + Grafana) ────────────────────────────────────
 cd "$INSTALL_DIR"
 docker compose up -d
