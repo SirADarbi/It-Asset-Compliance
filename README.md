@@ -4,6 +4,12 @@
 
 A production-ready compliance management system with FastAPI, PostgreSQL, Grafana, Terraform (AWS), Jenkins CI/CD, and GitHub Actions.
 
+### Architecture
+
+End-to-end flow: **Developer** pushes to GitHub → **GitHub Actions** runs tests and infra checks (pytest, `docker compose config`, shellcheck, `terraform fmt`) → **Jenkins** (optional self-hosted CD) checks out, installs, tests, and deploys via SSH → **Terraform** provisions **EC2** + **Elastic IP** → on the instance, **FastAPI** (systemd) talks to **PostgreSQL**; **Grafana** queries Postgres directly for dashboards. A **sysadmin** reaches the API and Grafana over HTTP.
+
+![Infrastructure & CI/CD diagram](docs/architecture-diagram.png)
+
 ---
 
 ## Prerequisites
@@ -72,6 +78,10 @@ pytest tests/ -v
 | API docs (Swagger) | http://localhost:8000/docs | — |
 | API docs (ReDoc) | http://localhost:8000/redoc | — |
 | Grafana dashboard | http://localhost:3000 | admin / admin123 |
+
+After seeding assets and running `POST /compliance/run`, the **IT Asset Compliance** dashboard shows active asset count, critical violations, a severity breakdown, and a full table of failed checks (hostname, policy, severity, detail).
+
+![Grafana — IT Asset Compliance Dashboard](docs/grafana-dashboard.png)
 
 ---
 
