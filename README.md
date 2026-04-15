@@ -4,22 +4,17 @@
 
 ### Purpose
 
-Organizations struggle to answer basic operational questions at scale: **what do we own**, **where is it exposed**, and **does it still match our security standards**—without spreadsheets and one-off scans. Drift happens fast (unpatched systems, risky ports, encryption or endpoint protection gaps), and when audits, incidents, or leadership ask for proof, teams need **repeatable checks**, **stored evidence**, and **prioritized findings**—not ad-hoc screenshots.
+You can't really defend assets you aren't tracking, and "tracking" usually means more than a device list. Teams need to know if boxes are patched, if dumb stuff like Telnet is open, whether laptops have encryption and AV turned on, and they need that written down somewhere when someone asks for proof after an audit or an incident.
 
-This application addresses that by combining a **central asset inventory** with **automated policy evaluation** against that inventory. It gives a single place to register assets, run the same rules on a schedule or on demand, record pass/fail outcomes with severity, surface violations in **dashboards**, and **export reports** for remediation tracking, ticketing, or audit documentation.
+This repo is a working backend for that kind of problem. Assets live in Postgres, a handful of rules run against them in one shot, and every check is stored with a severity so you can see what failed and when. Grafana hooks straight into the same database for charts; the API plus JSON/XML endpoints are there when you want to feed another tool or attach something to a ticket.
 
-**Capabilities:**
+**Rough feature set:** CRUD for assets (hostnames, types, ports, patch dates, flags you care about), run all policies on demand, filter results, Grafana dashboards, downloadable reports.
 
-- Maintain structured records for each asset (identity, type, network exposure, patch posture, encryption, AV, password policy alignment, etc.).
-- Execute a defined set of compliance rules and persist every result with timestamps for traceability.
-- Summarize risk (e.g. by severity) and drill into failed checks by hostname and policy.
-- Consume results via API, Grafana, or downloadable JSON/XML for downstream workflows.
-
-**Stack (at a glance):** FastAPI, PostgreSQL, Grafana, Docker Compose, Terraform (AWS), Jenkins, GitHub Actions.
+**Stack:** FastAPI, PostgreSQL, Grafana, Docker Compose, Terraform on AWS, Jenkins (optional), GitHub Actions.
 
 ### Architecture
 
-End-to-end flow: **Developer** pushes to GitHub → **GitHub Actions** runs tests and infra checks (pytest, `docker compose config`, shellcheck, `terraform fmt`) → **Jenkins** (optional self-hosted CD) checks out, installs, tests, and deploys via SSH → **Terraform** provisions **EC2** + **Elastic IP** → on the instance, **FastAPI** (systemd) talks to **PostgreSQL**; **Grafana** queries Postgres directly for dashboards. A **sysadmin** reaches the API and Grafana over HTTP.
+Push code to GitHub and Actions runs pytest plus a few cheap checks (compose file parses, shellcheck, `terraform fmt`). If you wire up Jenkins, it can repeat install/test and then SSH to your server to pull and restart the app. Terraform builds a tiny Ubuntu EC2 with an elastic IP. On the box the API runs under systemd; Postgres and Grafana run in Docker. The API reads and writes the DB; Grafana only reads it for panels. You hit the API and Grafana on 8000 and 3000 over HTTP.
 
 ![Infrastructure & CI/CD diagram](docs/architecture-diagram.png)
 
@@ -48,7 +43,7 @@ docker compose up -d
 
 ```bash
 cp .env.example backend/.env
-# Edit backend/.env if needed — defaults work for local Docker setup
+# Edit backend/.env if needed; defaults work for local Docker setup
 ```
 
 ### 3. Install Python dependencies
@@ -88,13 +83,13 @@ pytest tests/ -v
 
 | Service | URL | Credentials |
 |---------|-----|-------------|
-| API docs (Swagger) | http://localhost:8000/docs | — |
-| API docs (ReDoc) | http://localhost:8000/redoc | — |
+| API docs (Swagger) | http://localhost:8000/docs | (none) |
+| API docs (ReDoc) | http://localhost:8000/redoc | (none) |
 | Grafana dashboard | http://localhost:3000 | admin / admin123 |
 
 After seeding assets and running `POST /compliance/run`, the **IT Asset Compliance** dashboard shows active asset count, critical violations, a severity breakdown, and a full table of failed checks (hostname, policy, severity, detail).
 
-![Grafana — IT Asset Compliance Dashboard](docs/grafana-dashboard.png)
+![Grafana IT Asset Compliance dashboard](docs/grafana-dashboard.png)
 
 ---
 
@@ -124,7 +119,7 @@ After seeding assets and running `POST /compliance/run`, the **IT Asset Complian
 
 ---
 
-## Terraform — AWS Deploy
+## Terraform (AWS deploy)
 
 ```bash
 cd infra/terraform
@@ -155,14 +150,10 @@ The `user_data.sh` boot script installs all dependencies, clones the repo, and s
 
 1. Create a new **Pipeline** job in Jenkins
 2. Point it at this repo (`Jenkinsfile` at root)
-3. Set the following environment variables (Jenkins → Manage → System or per-job):
-   - `EC2_HOST` — Elastic IP from Terraform output
-   - `SSH_KEY_PATH` — path to the `.pem` key file on the Jenkins agent
-4. The pipeline has four stages:
-   - **Checkout** — pulls source
-   - **Install** — `pip install -r backend/requirements.txt`
-   - **Test** — `pytest backend/tests/ -v` (fails pipeline if tests fail)
-   - **Deploy** — SSH into EC2 and restarts the service (runs on `main` branch only)
+3. Set environment variables (Jenkins → Manage → System or per-job):
+   - `EC2_HOST`: Elastic IP from Terraform output
+   - `SSH_KEY_PATH`: path to the `.pem` key file on the Jenkins agent
+4. Pipeline stages: Checkout, Install (`pip install -r backend/requirements.txt`), Test (`pytest backend/tests/ -v`, fails the build on failure), Deploy (SSH to EC2 and restart the service, `main` only)
 
 ---
 
