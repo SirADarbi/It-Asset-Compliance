@@ -43,6 +43,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate docker-compose.yml syntax
+        # Provide placeholder values so the :? required-variable checks in
+        # docker-compose.yml don't block syntax validation in CI.
+        # These are NOT real credentials — validation only.
+        env:
+          POSTGRES_PASSWORD: ci-placeholder
+          GF_SECURITY_ADMIN_PASSWORD: ci-placeholder
         run: docker compose config --quiet
 
       - name: Lint shell scripts with ShellCheck
