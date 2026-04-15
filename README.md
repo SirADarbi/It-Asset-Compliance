@@ -4,25 +4,25 @@
 
 ### Purpose
 
-You can't really defend assets you aren't tracking, and "tracking" usually means more than a device list. Teams need to know if boxes are patched, if dumb stuff like Telnet is open, whether laptops have encryption and AV turned on, and they need that written down somewhere when someone asks for proof after an audit or an incident.
+You cannot defend IT assets you do not measure. Useful measurement goes beyond a device list: patch age, risky services (for example Telnet), disk encryption, antivirus status, and a stored history you can show during an audit or after an incident.
 
-This repo is a working backend for that kind of problem. Assets live in Postgres, a handful of rules run against them in one shot, and every check is stored with a severity so you can see what failed and when. Grafana hooks straight into the same database for charts; the API plus JSON/XML endpoints are there when you want to feed another tool or attach something to a ticket.
+This repository implements that workflow. You store assets in PostgreSQL, run a fixed set of compliance checks in one request, and persist each result with a severity. Grafana reads the same database for dashboards. The REST API exposes JSON and XML reports so other tools (SIEM, ticketing, scripts) can consume the data.
 
-**Rough feature set:** CRUD for assets (hostnames, types, ports, patch dates, flags you care about), run all policies on demand, filter results, Grafana dashboards, downloadable reports.
+**Features:** create, read, update, and delete assets; run all policies on demand; filter results; Grafana panels; JSON and XML report downloads.
 
-**Stack:** FastAPI, PostgreSQL, Grafana, Docker Compose, Terraform on AWS, Jenkins (optional), GitHub Actions.
+**Stack:** FastAPI, PostgreSQL, Grafana, Docker Compose, Terraform on AWS, GitHub Actions, and optional Jenkins.
 
 ### Architecture
 
-Push code to GitHub and Actions runs pytest plus a few cheap checks (compose file parses, shellcheck, `terraform fmt`). If you wire up Jenkins, it can repeat install/test and then SSH to your server to pull and restart the app. Terraform builds a tiny Ubuntu EC2 with an elastic IP. On the box the API runs under systemd; Postgres and Grafana run in Docker. The API reads and writes the DB; Grafana only reads it for panels. You hit the API and Grafana on 8000 and 3000 over HTTP.
+**Flow.** You push code to GitHub. **GitHub Actions** runs on every push to `main` and on pull requests that target `main`. It installs dependencies, runs pytest, checks Terraform formatting, validates the Docker Compose file, and lints shell scripts. **Jenkins** is optional: it can run a similar install and test sequence, then deploy to your server over SSH when the branch is `main`. **Terraform** provisions a small Ubuntu EC2 instance with an Elastic IP. On the server, **FastAPI** runs as a **systemd** service; **PostgreSQL** and **Grafana** run under **Docker Compose**. The API reads and writes the database; Grafana runs read-only queries for charts. By default you reach the API on port **8000** and Grafana on **3000** over HTTP.
 
 <p align="center">
-  <img src="docs/architecture-diagram.png" alt="Architecture: Developer to GitHub; Actions and Jenkins to AWS EC2 T3 with EIP; Terraform; FastAPI on systemd; Docker Compose with PostgreSQL and Grafana" width="900" />
+  <img src="docs/architecture-diagram.png" alt="Architecture: GitHub, GitHub Actions, Jenkins, Terraform, AWS EC2, FastAPI on systemd, Docker Compose with PostgreSQL and Grafana" width="900" />
 </p>
 
 #### OpenAPI (Swagger)
 
-With the API running locally, open **http://localhost:8000/docs** for interactive docs (machine-readable spec at **http://localhost:8000/openapi.json**). The screenshots below show the grouped endpoints and the request/response schemas.
+When the API is running locally, browse to **http://localhost:8000/docs** for interactive documentation. The machine-readable OpenAPI definition is at **http://localhost:8000/openapi.json**. The screenshots below list the endpoint groups and the main request/response schemas.
 
 <p align="center">
   <img src="docs/swagger-ui.png" alt="Swagger UI: assets, compliance, reports, and health endpoints" width="900" />
@@ -34,25 +34,35 @@ With the API running locally, open **http://localhost:8000/docs** for interactiv
 
 ## Architectural decisions
 
-**API on the host, data stack in Docker.** FastAPI runs under systemd on the EC2 instance so deploys are a `git pull` and service restart. PostgreSQL and Grafana run in Docker Compose so you get reproducible versions of the database and dashboards without containerizing the whole app. The API talks to Postgres over the host network; Grafana uses read-only SQL against the same database for charts.
+**FastAPI on the host, database and Grafana in Docker.** The API runs under systemd so a deploy is usually `git pull` and `systemctl restart`. Only PostgreSQL and Grafana run in containers, which pins their versions without forcing the whole backend into an image. The API connects to Postgres on the host; Grafana uses read-only SQL against the same data.
 
-**Small, explicit AWS footprint.** Terraform provisions a single Ubuntu instance (instance type is configurable; default is `t2.micro`), a security group for SSH and the app ports, and an Elastic IP. That keeps cost and moving parts low compared with orchestrating Kubernetes or a full platform stack for a compliance API and a dashboard.
+**Small AWS footprint.** Terraform creates one Ubuntu EC2 instance (type is configurable; default `t2.micro`), a security group for SSH and application ports, and an Elastic IP. That avoids the overhead of Kubernetes for a single API and a dashboard.
 
-**Two CI/CD paths on purpose: GitHub Actions and Jenkins.** GitHub Actions runs on every push and pull request against `main`: install dependencies, run pytest, and sanity-check Terraform, Compose, and shell scripts. You get fast feedback in the GitHub UI with no extra infrastructure, which suits day-to-day development and forks. Jenkins is optional: it mirrors a classic pipeline (checkout, install, test, then deploy over SSH on `main` only) for teams that already standardize on Jenkins, need a deploy job inside a private network, or want to demonstrate that pattern alongside Actions. The overlap is intentional: Actions is the lightweight default gate; Jenkins is there when you care about a dedicated CI server talking to your server over SSH.
+**GitHub Actions and Jenkins together on purpose.**
 
-**Policy engine in process.** Compliance rules run inside the FastAPI app as plain Python checks over ORM models. That keeps the model simple for a portfolio or teaching repo; a larger system might push rules to a separate service or engine.
+- **GitHub Actions** is the default continuous integration gate. It runs on pushes and pull requests to `main`: install Python dependencies, run pytest, validate Terraform and Compose files, and lint shell scripts. Results show up in GitHub; contributors and forks do not need your Jenkins server.
+- **Jenkins** is optional. It fits teams that already use Jenkins or want a pipeline that checks out code, tests it, then deploys over SSH to EC2 from `main`. The test stage overlaps Actions deliberately so the repo can show both a GitHub-native workflow and a traditional Jenkins deploy.
+
+**Compliance logic lives in application code.** Policies are ordinary Python functions over SQLAlchemy models. That keeps the codebase easy to follow; a larger product might move rules into a separate service or rules engine.
 
 ## Limitations and possible improvements
 
-Production hardening is left as an exercise: TLS in front of the API and Grafana, authentication and authorization on the API, secrets in AWS Systems Manager Parameter Store or Secrets Manager instead of only env files, and tighter security-group rules than “open app ports to the world” once you know your client networks.
+**Production readiness.** The examples assume HTTP and broad security-group access. For real production you would add TLS, protect the API with authentication and authorization, store secrets in AWS Systems Manager Parameter Store or Secrets Manager (not only `.env` files), and narrow network access to known clients or VPNs.
 
-The data model and policies are intentionally small. You could add database migrations as the schema evolves, scheduled or event-driven compliance runs, richer policies (custom fields, exceptions, ownership), webhooks when checks fail, and broader automated testing (integration tests against Postgres, security scanning in CI).
+**Product depth.** The schema and rule set are intentionally small. Natural next steps include database migrations as tables grow, scheduled or triggered compliance runs, richer policies (custom fields, exceptions, ownership), webhooks when checks fail, integration tests against PostgreSQL, and security scanning in CI.
 
-Observability could go beyond Grafana: structured logging, metrics, tracing, and alerting when critical checks fail.
+**Operations.** Beyond Grafana dashboards, you might add structured logs, metrics, distributed tracing, and alerts when critical checks fail.
 
 ## Extending the project
 
-Good directions to build on this base: feed assets from real inventory (SCCM, Intune, cloud asset APIs) instead of only manual CRUD; export findings into a SIEM or ticketing (Jira, ServiceNow); add SSO for Grafana and role-based access for the API; multi-tenant separation if several teams share one deployment; signed or archived compliance reports for auditors; and agent-based or API-based checks where the server can reach endpoints or agents can push state.
+Ideas that build naturally on this design:
+
+- Import assets from real inventory (Microsoft Endpoint Manager, cloud APIs) instead of typing them in by hand.
+- Forward violations to a SIEM or ticketing system (for example Jira or ServiceNow).
+- Add SSO for Grafana and role-based access for the API.
+- Support multiple tenants on one deployment if teams share infrastructure.
+- Ship signed or archived reports for auditors.
+- Run checks from agents or from the server when endpoints are reachable.
 
 ---
 
@@ -123,7 +133,7 @@ pytest tests/ -v
 | API docs (ReDoc) | http://localhost:8000/redoc | (none) |
 | Grafana dashboard | http://localhost:3000 | admin / admin123 |
 
-After seeding assets and running `POST /compliance/run`, the **IT Asset Compliance** dashboard shows active asset count, critical violations, a severity breakdown, and a full table of failed checks (hostname, policy, severity, detail).
+After you seed assets and call `POST /compliance/run`, the **IT Asset Compliance** Grafana dashboard shows how many assets are active, how many critical issues exist, a breakdown by severity, and a table of failed checks (hostname, rule name, severity, detail).
 
 ![Grafana IT Asset Compliance dashboard](docs/grafana-dashboard.png)
 
@@ -178,30 +188,26 @@ Resources created:
 - Security group (ports 22, 8000, 3000)
 - Elastic IP
 
-The `user_data.sh` boot script installs all dependencies, clones the repo, and starts the compliance-api systemd service automatically.
+On first boot, `user_data.sh` installs dependencies, clones this repository, and enables the `compliance-api` systemd service.
 
 ---
 
 ## Jenkins CI/CD Setup
 
-1. Create a new **Pipeline** job in Jenkins
-2. Point it at this repo (`Jenkinsfile` at root)
-3. Set environment variables (Jenkins → Manage → System or per-job):
-   - `EC2_HOST`: Elastic IP from Terraform output
-   - `SSH_KEY_PATH`: path to the `.pem` key file on the Jenkins agent
-4. Pipeline stages: Checkout, Install (`pip install -r backend/requirements.txt`), Test (`pytest backend/tests/ -v`, fails the build on failure), Deploy (SSH to EC2 and restart the service, `main` only)
+1. Create a **Pipeline** job in Jenkins.
+2. Set the job to use the `Jenkinsfile` in the repository root.
+3. Configure these environment variables (globally under **Manage Jenkins → System** or on the job):
+   - `EC2_HOST`: the Elastic IP from `terraform output elastic_ip`
+   - `SSH_KEY_PATH`: full path to the SSH private key (`.pem`) on the Jenkins agent
+4. Stages run in order: checkout code, install requirements from `backend/requirements.txt`, run `pytest backend/tests/` (a failing test fails the build), then on `main` only SSH to the server to pull the latest code and restart the service.
 
 ---
 
 ## GitHub Actions
 
-Triggered automatically on push/PR to `main`:
+Workflow file: `.github/workflows/ci.yml`. It runs on pushes to `main` and on pull requests that target `main`.
 
-```
-.github/workflows/ci.yml
-```
-
-Jobs: install → pytest → report
+Two jobs run in parallel: **Python tests** (install dependencies, run pytest) and **infrastructure checks** (`docker compose config`, ShellCheck on deploy scripts, `terraform fmt -check` on `infra/terraform`).
 
 ---
 
