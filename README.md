@@ -16,7 +16,21 @@ This repo is a working backend for that kind of problem. Assets live in Postgres
 
 Push code to GitHub and Actions runs pytest plus a few cheap checks (compose file parses, shellcheck, `terraform fmt`). If you wire up Jenkins, it can repeat install/test and then SSH to your server to pull and restart the app. Terraform builds a tiny Ubuntu EC2 with an elastic IP. On the box the API runs under systemd; Postgres and Grafana run in Docker. The API reads and writes the DB; Grafana only reads it for panels. You hit the API and Grafana on 8000 and 3000 over HTTP.
 
-![Infrastructure & CI/CD diagram](docs/architecture-diagram.png)
+<p align="center">
+  <img src="docs/architecture-diagram.png" alt="Architecture: Developer to GitHub; Actions and Jenkins to AWS EC2 T3 with EIP; Terraform; FastAPI on systemd; Docker Compose with PostgreSQL and Grafana" width="900" />
+</p>
+
+#### OpenAPI (Swagger)
+
+With the API running locally, open **http://localhost:8000/docs** for interactive docs (machine-readable spec at **http://localhost:8000/openapi.json**). The screenshots below show the grouped endpoints and the request/response schemas.
+
+<p align="center">
+  <img src="docs/swagger-ui.png" alt="Swagger UI: assets, compliance, reports, and health endpoints" width="900" />
+</p>
+
+<p align="center">
+  <img src="docs/swagger-schemas.png" alt="OpenAPI schemas: Asset, AssetCreate, AssetUpdate, compliance models, and validation errors" width="900" />
+</p>
 
 ---
 
