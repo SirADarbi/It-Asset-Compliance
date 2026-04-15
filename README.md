@@ -1,5 +1,7 @@
 # IT Asset & Security Compliance Tool
 
+[![CI](https://github.com/SirADarbi/It-Asset-Compliance/actions/workflows/ci.yml/badge.svg)](https://github.com/SirADarbi/It-Asset-Compliance/actions/workflows/ci.yml)
+
 A production-ready compliance management system with FastAPI, PostgreSQL, Grafana, Terraform (AWS), Jenkins CI/CD, and GitHub Actions.
 
 ---
