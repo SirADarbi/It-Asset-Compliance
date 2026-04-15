@@ -32,6 +32,28 @@ With the API running locally, open **http://localhost:8000/docs** for interactiv
   <img src="docs/swagger-schemas.png" alt="OpenAPI schemas: Asset, AssetCreate, AssetUpdate, compliance models, and validation errors" width="900" />
 </p>
 
+## Architectural decisions
+
+**API on the host, data stack in Docker.** FastAPI runs under systemd on the EC2 instance so deploys are a `git pull` and service restart. PostgreSQL and Grafana run in Docker Compose so you get reproducible versions of the database and dashboards without containerizing the whole app. The API talks to Postgres over the host network; Grafana uses read-only SQL against the same database for charts.
+
+**Small, explicit AWS footprint.** Terraform provisions a single Ubuntu instance (instance type is configurable; default is `t2.micro`), a security group for SSH and the app ports, and an Elastic IP. That keeps cost and moving parts low compared with orchestrating Kubernetes or a full platform stack for a compliance API and a dashboard.
+
+**Two CI/CD paths on purpose: GitHub Actions and Jenkins.** GitHub Actions runs on every push and pull request against `main`: install dependencies, run pytest, and sanity-check Terraform, Compose, and shell scripts. You get fast feedback in the GitHub UI with no extra infrastructure, which suits day-to-day development and forks. Jenkins is optional: it mirrors a classic pipeline (checkout, install, test, then deploy over SSH on `main` only) for teams that already standardize on Jenkins, need a deploy job inside a private network, or want to demonstrate that pattern alongside Actions. The overlap is intentional: Actions is the lightweight default gate; Jenkins is there when you care about a dedicated CI server talking to your server over SSH.
+
+**Policy engine in process.** Compliance rules run inside the FastAPI app as plain Python checks over ORM models. That keeps the model simple for a portfolio or teaching repo; a larger system might push rules to a separate service or engine.
+
+## Limitations and possible improvements
+
+Production hardening is left as an exercise: TLS in front of the API and Grafana, authentication and authorization on the API, secrets in AWS Systems Manager Parameter Store or Secrets Manager instead of only env files, and tighter security-group rules than “open app ports to the world” once you know your client networks.
+
+The data model and policies are intentionally small. You could add database migrations as the schema evolves, scheduled or event-driven compliance runs, richer policies (custom fields, exceptions, ownership), webhooks when checks fail, and broader automated testing (integration tests against Postgres, security scanning in CI).
+
+Observability could go beyond Grafana: structured logging, metrics, tracing, and alerting when critical checks fail.
+
+## Extending the project
+
+Good directions to build on this base: feed assets from real inventory (SCCM, Intune, cloud asset APIs) instead of only manual CRUD; export findings into a SIEM or ticketing (Jira, ServiceNow); add SSO for Grafana and role-based access for the API; multi-tenant separation if several teams share one deployment; signed or archived compliance reports for auditors; and agent-based or API-based checks where the server can reach endpoints or agents can push state.
+
 ---
 
 ## Prerequisites
