@@ -1,5 +1,3 @@
-version: '3.8'
-
 # Credentials are read from a root-level .env file (copy .env.example → .env).
 # Docker Compose automatically reads .env from the project root.
 # Required vars: POSTGRES_PASSWORD, GF_SECURITY_ADMIN_PASSWORD
