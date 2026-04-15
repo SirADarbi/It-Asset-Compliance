@@ -1,0 +1,50 @@
+version: '3.8'
+
+# Credentials are read from a root-level .env file (copy .env.example → .env).
+# Docker Compose automatically reads .env from the project root.
+# Required vars: POSTGRES_PASSWORD, GF_SECURITY_ADMIN_PASSWORD
+# Optional vars: POSTGRES_USER (default: admin)
+
+services:
+  db:
+    image: postgres:15
+    container_name: compliance_postgres
+    environment:
+      POSTGRES_DB: asset_compliance
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env file}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-admin} -d asset_compliance"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: compliance_grafana
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${POSTGRES_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GF_SECURITY_ADMIN_PASSWORD:?Set GF_SECURITY_ADMIN_PASSWORD in your .env file}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/compliance.json
+      # Passed through so grafana/provisioning/datasources/postgres.yml can expand it
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your .env file}
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  grafana_data:

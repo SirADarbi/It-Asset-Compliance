@@ -1,0 +1,23 @@
+apiVersion: 1
+
+# Grafana expands ${VAR} from the container's environment at startup.
+# POSTGRES_USER and POSTGRES_PASSWORD are injected via docker-compose.yml.
+
+datasources:
+  - name: PostgreSQL Asset Compliance
+    type: postgres
+    uid: asset-compliance-pg
+    url: db:5432
+    database: asset_compliance
+    user: ${POSTGRES_USER}
+    secureJsonData:
+      password: ${POSTGRES_PASSWORD}
+    jsonData:
+      sslmode: disable
+      maxOpenConns: 100
+      maxIdleConns: 100
+      connMaxLifetime: 14400
+      postgresVersion: 1500
+      timescaledb: false
+    editable: true
+    isDefault: true
